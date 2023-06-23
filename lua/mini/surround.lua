@@ -662,6 +662,10 @@ MiniSurround.add = function(mode)
   end
   if surr_info == nil then return '<Esc>' end
 
+  -- Adjust for count used before operator
+  local left = surr_info.left:rep(H.cache.count)
+  local right = surr_info.right:rep(H.cache.count)
+
   -- Add surrounding.
   -- Possibly deal with linewise and blockwise addition separately
   local respect_selection_type = H.get_config().respect_selection_type
@@ -669,11 +673,11 @@ MiniSurround.add = function(mode)
   if not respect_selection_type or marks.selection_type == 'charwise' then
     -- Begin insert from right to not break column numbers
     -- Insert after the right mark (`+ 1` is for that)
-    H.region_replace({ from = { line = marks.second.line, col = marks.second.col + 1 } }, surr_info.right)
-    H.region_replace({ from = marks.first }, surr_info.left)
+    H.region_replace({ from = { line = marks.second.line, col = marks.second.col + 1 } }, right)
+    H.region_replace({ from = marks.first }, left)
 
     -- Set cursor to be on the right of left surrounding
-    H.set_cursor(marks.first.line, marks.first.col + surr_info.left:len())
+    H.set_cursor(marks.first.line, marks.first.col + left:len())
 
     return
   end
@@ -689,8 +693,8 @@ MiniSurround.add = function(mode)
     H.set_cursor_nonblank(from_line)
 
     -- Put surroundings on separate lines
-    vim.fn.append(to_line, init_indent .. surr_info.right)
-    vim.fn.append(from_line - 1, init_indent .. surr_info.left)
+    vim.fn.append(to_line, init_indent .. right)
+    vim.fn.append(from_line - 1, init_indent .. left)
 
     return
   end
@@ -704,11 +708,11 @@ MiniSurround.add = function(mode)
     from_col, to_col = math.min(from_col, to_col), math.max(from_col, to_col)
 
     for i = marks.first.line, marks.second.line do
-      H.region_replace({ from = { line = i, col = to_col + 1 } }, surr_info.right)
-      H.region_replace({ from = { line = i, col = from_col } }, surr_info.left)
+      H.region_replace({ from = { line = i, col = to_col + 1 } }, right)
+      H.region_replace({ from = { line = i, col = from_col } }, left)
     end
 
-    H.set_cursor(marks.first.line, from_col + surr_info.left:len())
+    H.set_cursor(marks.first.line, from_col + left:len())
 
     return
   end
@@ -1063,6 +1067,7 @@ H.builtin_surroundings = {
 -- - 'direction' - direction in which `MiniSurround.find()` should go. Used to
 --   enable same `operatorfunc` pattern for dot-repeatability.
 -- - 'search_method' - search method.
+-- - 'count' - count used before operator.
 -- - 'msg_shown' - whether helper message was shown.
 H.cache = {}
 
@@ -1189,7 +1194,9 @@ H.make_operator = function(task, direction, search_method, ask_for_textobject)
       return [[\<Esc>]]
     end
 
-    H.cache = { direction = direction, search_method = search_method }
+    -- Make it work in `sa` for Visual selection followed the `2saaw)`.
+    H.cache = { count = vim.v.count1, direction = direction, search_method = search_method }
+    vim.v.count1 = 1
 
     vim.o.operatorfunc = 'v:lua.MiniSurround.' .. task
 
